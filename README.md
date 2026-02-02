@@ -1,9 +1,13 @@
 # CVPR26-3DCTFMCompetition
 CVPR 2026: Foundation Models for 3D Computed Tomography
 This repository contains evaluation scripts for task 1 and task 2 and linear probing scripts for task 3:
+
 Task 1:
+
 Task 2:
+
 Task 3:
+
 ## Evaluation
 The evaluation script `CVPR25_iter_eval.py` evaluates Docker submissions for the **CVPR25: Foundation Models for Interactive 3D Biomedical Image Segmentation Challenge** using an iterative refinement approach.
 
