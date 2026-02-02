@@ -2,11 +2,11 @@
 CVPR 2026: Foundation Models for 3D Computed Tomography
 This repository contains evaluation scripts for task 1 and task 2 and linear probing scripts for task 3:
 
-Task 1:
+Task 1: Linear probing -- assessing the intrinsic discriminative power of pretrained representations under frozen backbones.
 
-Task 2:
+Task 2: Full fine-tuning -- evaluating model adaptability when all parameters are updated for downstream tasks.
 
-Task 3:
+Task 3: Learning strategy optimization -- exploring effective adaptation strategies, including head design, learning schedules, and partial versus full parameter optimization.
 
 ## Evaluation
 The evaluation script `CVPR25_iter_eval.py` evaluates Docker submissions for the **CVPR25: Foundation Models for Interactive 3D Biomedical Image Segmentation Challenge** using an iterative refinement approach.
