@@ -15,13 +15,16 @@ It hosts scripts used for the following:
 - `get_fg_mask.py`: Foreground mask generation
 
 ## Installation
-```bash
-conda create -n cvpr26_ctfm python=3.11 -y
-conda activate cvpr26_ctfm
+The usage instruction is based on CT-NEXUS docker available [here](https://drive.google.com/file/d/1ke8_l0KRzQEzCOvvf3t_9yfVhJWOtQbq/view?usp=drive_link).
 
-# Clone the repository
-cd /path/to/CVPR26-3DCTFMCompetition
-pip install -e .
+```bash
+cd CVPR26-3DCTFMCompetition
+# Create virtual environment with uv
+uv venv --python 3.12
+# Activate the environment
+source .venv/bin/activate
+# Install the package
+uv pip install -e .
 ```
 
 ## Usage

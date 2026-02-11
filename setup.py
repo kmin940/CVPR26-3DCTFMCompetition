@@ -18,7 +18,7 @@ setup(
     long_description_content_type="text/markdown",
     url="https://github.com/kmin940/CVPR26-3DCTFMCompetition",  # Update with actual repo URL
     packages=find_packages(include=["data_utils", "metrics"]),
-    python_requires=">=3.11",
+    python_requires=">=3.12",
     install_requires=[
         # Core dependencies
         "torch>=2.0.0",
