@@ -1,0 +1,53 @@
+# custom 
+not_upload/
+outputs*
+results*
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+.venv/
+venv/
+*.egg-info/
+
+# Conda
+*.conda
+.envs/
+
+# PyTorch / ML
+*.pt
+*.pth
+*.ckpt
+*.onnx
+
+# Data (CT / medical imaging)
+*.nii
+*.nii.gz
+*.h5
+*.hdf5
+*.npz
+*.zarr/
+data/
+datasets/
+
+# Logs & outputs
+logs/
+outputs/
+wandb/
+runs/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Slurm
+*.out
+*.err
