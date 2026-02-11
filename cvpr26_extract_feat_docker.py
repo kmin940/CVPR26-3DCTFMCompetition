@@ -32,16 +32,14 @@ import pandas as pd
 
 parser = argparse.ArgumentParser('Feature extraction efficiency evaluation for docker containers', add_help=False)
 parser.add_argument('-i', '--test_img_path', default='./test_demo/imgs', type=str, help='testing data path')
-parser.add_argument('-l', '--labels_root', default='./test_demo/labels', type=str, help='testing data path')
 parser.add_argument('-m', '--mask_root', default=None, type=str, help='path to mask directory (for ROI-based diseases only)')
 parser.add_argument('-o','--save_path', default='./test_demo/feats', type=str, help='feature extraction output path')
 parser.add_argument('-d','--docker_folder_path', default='./team_dockers', type=str, help='team docker path')
-parser.add_argument('--target', default='splenomegaly', type=str, help='target disease for feature extraction')
 parser.add_argument('--keep_temp', action='store_true', help='keep temporary input/output folders')
 args = parser.parse_args()
 
 test_img_path = args.test_img_path
-target = args.target
+#target = args.target
 save_path = args.save_path
 docker_path = args.docker_folder_path
 
@@ -51,14 +49,8 @@ os.makedirs(save_path, exist_ok=True)
 
 dockers = sorted(os.listdir(docker_path))
 dockers = [docker for docker in dockers if docker.endswith('.tar.gz')]
-df_path = os.path.join(args.labels_root, f'{target}.csv')
-df = pd.read_csv(df_path)
-test_cases = df['case_id'].tolist()
-test_cases.sort()
-#test_cases = test_cases[:1] # for debug
-
-available_splits = df['split'].unique().tolist()
-
+test_cases = sorted(os.listdir(test_img_path))
+# test_cases = test_cases[:1] # for debug
 
 for docker in dockers:
     try:
@@ -70,17 +62,11 @@ for docker in dockers:
         os.makedirs(input_temp, exist_ok=True)
         os.makedirs(output_temp, exist_ok=True)
 
-        # copy label directory to input_temp
-        shutil.copytree(args.labels_root, os.path.join(input_temp, "labels"), dirs_exist_ok=True)
-
         # load docker and create a new folder to save feature extraction results
         teamname = docker.split('.')[0].lower()
         print('teamname docker: ', docker)
         os.system('docker image load -i {}'.format(join(docker_path, docker)))
-        team_outpath = join(save_path, teamname, target, 'feats_lin_probe')
-        # make subdir in save_path for each split
-        for split in available_splits:
-            os.makedirs(join(team_outpath, split), exist_ok=True)
+        team_outpath = join(save_path, teamname, 'feats_lin_probe')
         if args.mask_root is not None:
             os.makedirs(join(input_temp, "masks"), exist_ok=True)
         # if os.path.exists(team_outpath):
@@ -95,14 +81,13 @@ for docker in dockers:
         # To obtain the running time for each case, testing cases are inferred one-by-one
         for case in test_cases:
             # get corresponding split from df
-            split = df.loc[df['case_id'] == case, 'split'].values[0]
             try:
                 dst = shutil.copy(join(test_img_path, case), input_temp)
                 os.chmod(dst, 0o644)
             except:
                 raise Exception(f"Error copying {case} from {join(test_img_path, case)} to {input_temp}. Please check if the file exists and permissions are set correctly.")
             if args.mask_root is not None:
-                mask_src = join(args.mask_root, target, case)
+                mask_src = join(args.mask_root, case)
                 #if os.path.exists(mask_src):
                 dst_mask = shutil.copy(mask_src, join(input_temp, "masks"))
                 os.chmod(dst_mask, 0o644)
@@ -134,7 +119,7 @@ for docker in dockers:
             if os.path.exists(output_temp) and os.listdir(output_temp):
                 for output_file in os.listdir(output_temp):
                     src = join(output_temp, output_file)
-                    dst = join(team_outpath, split, output_file)
+                    dst = join(team_outpath, output_file)
                     try:
                         if os.path.isfile(src):
                             shutil.copy2(src, dst)

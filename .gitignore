@@ -2,6 +2,7 @@
 not_upload/
 outputs*
 results*
+test_demo*
 
 # Python
 __pycache__/

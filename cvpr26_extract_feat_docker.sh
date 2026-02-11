@@ -1,17 +1,16 @@
 #/bin/bash
 
+target='gallstone'
 python cvpr26_extract_feat_docker.py \
     -i /home/jma/Documents/cryoSumin/CT_FM/data/raw_data_classify/amos-clf-tr-val/images \
-    -l /home/jma/Documents/cryoSumin/CT_FM/data/raw_data_classify/amos-clf-tr-val/labels \
-    -o ./results \
+    -o ./results/${target} \
     -d /home/jma/Documents/cryoSumin/CT_FM/CT-NEXUS \
-    -m /home/jma/Documents/cryoSumin/CT_FM/data/raw_data_classify/amos-clf-tr-val/fg_masks \
-    --target fatty_liver
+    -m /home/jma/Documents/cryoSumin/CT_FM/data/raw_data_classify/amos-clf-tr-val/fg_masks/${target} \
+
 
 # python cvpr26_extract_feat_docker.py \
-#     -i /path/to/amos-clf-tr-val/images \
-#     -l /path/to/amos-clf-tr-val/labels \
-#     -o ./results \
+#     -i /path/to/AMOS-clf-tr-val/images \
+#     -l /path/to/AMOS-clf-tr-val/labels \
+#     -o ./results/${target} \
 #     -d ./team_dockers \
-#     --target splenomegaly \
-#     --keep_temp
+#     -m /path/to/AMOS-clf-tr-val/fg_masks/${target} \

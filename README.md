@@ -19,7 +19,6 @@ It hosts scripts used for the following:
 cd CVPR26-3DCTFMCompetition
 # Create virtual environment with uv
 uv venv --python 3.12
-# Activate the environment
 source .venv/bin/activate
 # Install the package
 uv pip install -e .
@@ -27,6 +26,14 @@ uv pip install -e .
 
 ## Usage
 The usage instruction is based on CT-NEXUS docker available [here](https://drive.google.com/file/d/1ke8_l0KRzQEzCOvvf3t_9yfVhJWOtQbq/view?usp=drive_link).
+
+### 0. Test demo cases using Docker
+```
+docker load -i ctnexus.tar.gz
+mkdir test_demo_outputs
+docker container run --gpus "device=0" -m 32G --name ctnexus --rm -v $PWD/test_demo/images/:/workspace/inputs/ -v $PWD/test_demo_outputs/:/workspace/outputs/ ctnexus:latest /bin/bash -c "sh extract_feat.sh"
+```
+In case of permission error, please use `chmod -R 777 .`
 
 ### 1. Feature Extraction using Docker
 Extracts embeddings from CT scans using foundation models packaged in Docker containers.
