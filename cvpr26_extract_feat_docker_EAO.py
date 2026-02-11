@@ -68,7 +68,7 @@ for docker in dockers:
         os.system('docker image load -i {}'.format(join(docker_path, docker)))
         team_outpath = join(save_path, teamname, 'feats_lin_probe')
         if args.mask_root is not None:
-            os.makedirs(join(input_temp, "masks"), exist_ok=True)
+            os.makedirs(join(input_temp, "fg_masks"), exist_ok=True)
         # if os.path.exists(team_outpath):
         #     shutil.rmtree(team_outpath)
         os.makedirs(team_outpath, exist_ok=True)
@@ -89,7 +89,7 @@ for docker in dockers:
             if args.mask_root is not None:
                 mask_src = join(args.mask_root, case)
                 #if os.path.exists(mask_src):
-                dst_mask = shutil.copy(mask_src, join(input_temp, "masks"))
+                dst_mask = shutil.copy(mask_src, join(input_temp, "fg_masks"))
                 os.chmod(dst_mask, 0o644)
                 # else:
                 #     print(f"Warning: Mask file {mask_src} not found for {case}. Proceeding without mask.")
@@ -98,8 +98,8 @@ for docker in dockers:
             # assert os.path.exists(join(input_temp, case)), f"Error: {case} not found in {input_temp} after copying. Please check the file and permissions."
             # Docker run command for feature extraction using extract_feat.sh
             # Set MASKS_DIR environment variable if mask_root is provided
-            env_var = '-e MASKS_DIR=/workspace/inputs/masks' if args.mask_root is not None else ''
-            cmd = 'docker container run --gpus "device=0" -m 32G --name {} --rm {} -v $PWD/inputs/:/workspace/inputs/ -v $PWD/outputs/:/workspace/outputs/ {}:latest /bin/bash -c "sh extract_feat.sh" '.format(teamname, env_var, teamname)
+            env_var = '-e MASKS_DIR=/workspace/inputs/fg_masks' if args.mask_root is not None else ''
+            cmd = 'docker container run --gpus "device=0" -m 32G --name {} --rm {} -v $PWD/inputs/:/workspace/inputs/ -v $PWD/outputs/:/workspace/outputs/ {}:latest /bin/bash -c "sh extract_feat_EAO.sh" '.format(teamname, env_var, teamname)
             # print(teamname, ' docker command:', cmd, '\n', 'testing image name:', case)
 
             start_time = time.time()

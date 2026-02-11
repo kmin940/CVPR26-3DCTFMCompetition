@@ -30,36 +30,42 @@ bash download_data.sh
 The usage instruction is based on CT-NEXUS docker available [here](https://drive.google.com/file/d/1ke8_l0KRzQEzCOvvf3t_9yfVhJWOtQbq/view?usp=drive_link).
 
 ### 0. Test demo cases using Docker
+Place [test_demo](https://huggingface.co/datasets/kmin06/CVPR26-3DCTFMCompetition/tree/main/AMOS-clf-tr-val/test_demo) in the current directory
 ```
 docker load -i ctnexus.tar.gz
 mkdir test_demo_outputs
-docker container run --gpus "device=0" -m 32G --name ctnexus --rm -v $PWD/test_demo/images/:/workspace/inputs/ -v $PWD/test_demo_outputs/:/workspace/outputs/ ctnexus:latest /bin/bash -c "sh extract_feat.sh"
+
+## for Non-ROI disease
+docker container run --gpus "device=0" -m 32G --name ctnexus --rm -v $PWD/test_demo/images/:/workspace/inputs/ -v $PWD/test_demo_outputs/:/workspace/outputs/ ctnexus:latest /bin/bash -c "sh extract_feat_LP.sh"
+
+## for ROI disease
+docker container run --gpus "device=0" -m 32G --name ctnexus --rm -e MASKS_DIR=/workspace/inputs/fg_masks/adrenal_hyperplasia -v $PWD/test_demo/:/workspace/inputs/ -v $PWD/test_demo_outputs/:/workspace/outputs/ ctnexus:latest /bin/bash -c "sh extract_feat_LP.sh"
 ```
 In case of permission error, please use `chmod -R 777 .`
+We will use `extract_feat_LP.sh` for **Task 1** linear probing, and `extract_feat_EAO.sh` for **Task 2** Embedding aggregation optimization.
 
 ### 1. Feature Extraction using Docker
 Extracts embeddings from CT scans using foundation models packaged in Docker containers.
 
 For non-ROI diseases:
 ```bash
-python cvpr26_extract_feat_docker.py \
-    -i /path/to/amos-clf-tr-val/images \
-    -l /path/to/amos-clf-tr-val/labels \
+python cvpr26_extract_feat_docker_LP.py \
+    -i /path/to/amos-clf-tr-val/images/target \
     -o ./path/to/results \
     -d ./path/to/docker/folder \
-    --target non-roi-disease
 ```
 
 For ROI diseases:
 ```bash
-python cvpr26_extract_feat_docker.py \
-    -i /path/to/amos-clf-tr-val/images \
-    -l /path/to/amos-clf-tr-val/labels \
-    -m /path/to/foreground/mask \
+python cvpr26_extract_feat_docker_LP.py \
+    -i /path/to/amos-clf-tr-val/images/target \
+    -m /path/to/foreground/fg_masks/target \
     -o ./path/to/results \
     -d ./path/to/docker/folder \
-    --target roi-disease
 ```
+We will use `cvpr26_extract_feat_docker_LP.py` for **Task 1** linear probing, and `cvpr26_extract_feat_docker_EAO.sh` for **Task 2** Embedding aggregation optimization.
+
+
 ROI diseases:
   splenomegaly,
   adrenal_hyperplasia,
@@ -86,12 +92,30 @@ Non-ROI diseases:
 - `-d, --dockers`: Directory containing team Docker images with foundation models
 - `--target`: Target disease for classification (e.g., splenomegaly, pneumonia).
 
-### 2. Linear Probing
+### 2. Linear Probing (LP)
 Trains and evaluates a linear classifier on top of frozen foundation model embeddings.
 
 ```bash
-python run_linear_probe.py \
-    --embeds_root /path/to/embeddings/features_ct_fm \
+python run_LP.py \
+    --embeds_root /path/to/embeddings/features_LP \
+    --labels_root /path/to/labels \
+    --disease splenomegaly \
+    --monitor_metric balanced_acc \
+    --use_wandb
+```
+- `--embeds_root`: Root directory containing extracted feature embeddings
+- `--labels_root`: Directory with ground truth CSV labels
+- `--disease`: Disease classification task (e.g., splenomegaly, pneumonia, emphysema)
+- `--monitor_metric`: Metric to monitor during training (balanced_acc, auroc, f1, etc.)
+- `--use_wandb`: Enable Weights & Biases logging for experiment tracking (optional)
+
+
+### 3. Embedding Aggregation Optimization (EAO)
+Trains and evaluates a linear classifier on top of frozen foundation model embeddings.
+
+```bash
+python run_LP.py \
+    --embeds_root /path/to/embeddings/features_EAO \
     --labels_root /path/to/labels \
     --disease splenomegaly \
     --monitor_metric balanced_acc \
