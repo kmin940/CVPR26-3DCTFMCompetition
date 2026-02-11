@@ -35,6 +35,8 @@ setup(
 
         # Logging and experiment tracking
         "wandb>=0.13.0",
+        # Hugging Face
+        "huggingface_hub>=0.20.0",
     ],
     extras_require={
         "dev": [
