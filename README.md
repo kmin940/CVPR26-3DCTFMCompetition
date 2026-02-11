@@ -15,8 +15,6 @@ It hosts scripts used for the following:
 - `get_fg_mask.py`: Foreground mask generation
 
 ## Installation
-The usage instruction is based on CT-NEXUS docker available [here](https://drive.google.com/file/d/1ke8_l0KRzQEzCOvvf3t_9yfVhJWOtQbq/view?usp=drive_link).
-
 ```bash
 cd CVPR26-3DCTFMCompetition
 # Create virtual environment with uv
@@ -28,6 +26,7 @@ uv pip install -e .
 ```
 
 ## Usage
+The usage instruction is based on CT-NEXUS docker available [here](https://drive.google.com/file/d/1ke8_l0KRzQEzCOvvf3t_9yfVhJWOtQbq/view?usp=drive_link).
 
 ### 1. Feature Extraction using Docker
 Extracts embeddings from CT scans using foundation models packaged in Docker containers.
