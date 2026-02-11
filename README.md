@@ -23,6 +23,8 @@ uv venv --python 3.12
 source .venv/bin/activate
 # Install the package
 uv pip install -e .
+# Download data
+bash download_data.sh
 ```
 
 ## Usage
