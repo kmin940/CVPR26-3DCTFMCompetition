@@ -1,12 +1,12 @@
 # CVPR 2026: Foundation Models for 3D Computed Tomography
 
-The challenge provides a comprehensive and systematic evaluation of foundation model adaptability along two key dimensions:
+This repository hosts evaluation of foundation model adaptability.
 
 1. Linear probing: assessing the intrinsic discriminative power of pretrained representations under frozen backbones.
 
 2. Embedding aggregation optimization: exploring effective adaptation strategies, including head design, learning schedules, and partial versus full parameter optimization.
 
-This repository hosts scripts used for the following:
+It hosts scripts used for the following:
 - Feature extraction
 - Linear probing
 - Inference & evaluation
@@ -16,6 +16,9 @@ This repository hosts scripts used for the following:
 
 ## Installation
 ```bash
+conda create -n cvpr26_ctfm python=3.11 -y
+conda activate cvpr26_ctfm
+
 # Clone the repository
 cd /path/to/CVPR26-3DCTFMCompetition
 pip install -e .
