@@ -114,7 +114,7 @@ for docker in dockers:
             # Docker run command for feature extraction using extract_feat.sh
             # Set MASKS_DIR environment variable if mask_root is provided
             env_var = '-e MASKS_DIR=/workspace/inputs/masks' if args.mask_root is not None else ''
-            cmd = 'docker container run --gpus all -m 8G --name {} --rm {} -v $PWD/inputs/:/workspace/inputs/ -v $PWD/outputs/:/workspace/outputs/ {}:latest /bin/bash -c "sh extract_feat.sh" '.format(teamname, env_var, teamname)
+            cmd = 'docker container run --gpus "device=0" -m 32G --name {} --rm {} -v $PWD/inputs/:/workspace/inputs/ -v $PWD/outputs/:/workspace/outputs/ {}:latest /bin/bash -c "sh extract_feat.sh" '.format(teamname, env_var, teamname)
             # print(teamname, ' docker command:', cmd, '\n', 'testing image name:', case)
 
             start_time = time.time()
