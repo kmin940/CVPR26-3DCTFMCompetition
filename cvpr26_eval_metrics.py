@@ -23,6 +23,7 @@ from metrics.balanced_accuracy import BalancedAccuracy
 
 def build_metrics(num_classes, device):
     """Build metric collection matching inference.py"""
+    # Alghough our CVPR26 challenge ranking only considers balanced_acc, auroc, we provide the full set of metrics.
     base_metrics = MetricCollection({
         "acc": Accuracy(task="multiclass", num_classes=num_classes),
         "f1": F1Score(task="multiclass", num_classes=num_classes, average="macro"),

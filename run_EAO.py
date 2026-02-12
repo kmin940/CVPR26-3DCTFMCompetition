@@ -229,6 +229,8 @@ def main():
                     help='Root directory containing CSV files for labels')
     ap.add_argument("--target", type=str, default='splenomegaly',
                     help='target name (used to construct CSV filename: target.csv)')
+    ap.add_argument("--out_dir", type=str, default=None, help="Directory to save results (default: embeds_root/target/linear_probe_results)")
+
 
     # Attention pooling hyperparameters
     ap.add_argument("--query_num", type=int, default=2,
@@ -276,7 +278,7 @@ def main():
             config=vars(args),
         )
 
-    out_dir = os.path.join(embeds_dir, 'attn_pool_results')
+    out_dir = args.out_dir
     os.makedirs(out_dir, exist_ok=True)
 
     # Construct CSV path from labels_root and target

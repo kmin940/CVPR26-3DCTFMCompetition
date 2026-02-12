@@ -23,20 +23,31 @@ from torchmetrics import (
 import pandas as pd
 
 class FeaturesDataset(Dataset):
-    def __init__(self, paths, csv_path, target_column=None):
-        #self.X, self.y = X.float(), y.long().view(-1)
-        self.paths = paths
-        # Load label mapping from CSV file
+    def __init__(self, embeds_dir, csv_path, split, target_column=None):
+        # Load CSV and filter by split
         df = pd.read_csv(csv_path)
+        split_df = df[df['split'] == split].copy()
 
-        # Create label mapping: filename -> label
-        # Assuming CSV has columns: 'case_id' (or filename) and target_column
+        # Build paths and label mapping
+        self.paths = []
         self.label_mapping = {}
-        for _, row in df.iterrows():
+
+        for _, row in split_df.iterrows():
             # Extract filename without extension
-            filename = row['case_id'].split('.nii.gz')[0] if '.nii.gz' in row['case_id'] else row['case_id']
-            filename = filename.replace('.h5', '')  # Also handle .h5 extension
-            self.label_mapping[filename] = int(row[target_column])
+            case_id = row['case_id']
+            filename = case_id.split('.nii.gz')[0] if '.nii.gz' in case_id else case_id
+            filename_base = filename.replace('.h5', '')  # Base filename for mapping
+
+            # Construct path with .h5 extension
+            h5_filename = filename_base + '.h5'
+            path = os.path.join(embeds_dir, h5_filename)
+
+            # Only add if file exists
+            if os.path.exists(path):
+                self.paths.append(path)
+                self.label_mapping[filename_base] = int(row[target_column])
+            else:
+                print(f"Warning: File not found, skipping: {path}")
 
     def __len__(self): return len(self.paths)
 
@@ -62,11 +73,8 @@ class FeaturesDataset(Dataset):
         return len(all_labels)
 
 
-def get_paths_in_split(base_dir, split):
-    split_dir = os.path.join(base_dir, split)
-    all_files = os.listdir(split_dir)
-    all_paths = [os.path.join(split_dir, f) for f in all_files if f.endswith('.h5')]
-    return all_paths
+# Removed: get_paths_in_split - now using 'split' column in CSV directly
+
 
 class AllClassifiers(nn.Module):
     def __init__(self, in_dim, num_classes, lrs):
@@ -197,6 +205,7 @@ def main():
                     help='Root directory containing CSV files for labels')
     ap.add_argument("--target", type=str, default='splenomegaly',
                     help='target name (used to construct CSV filename: target.csv)')
+    ap.add_argument("--out_dir", type=str, default=None, help="Directory to save results (default: embeds_root/target/linear_probe_results)")
     ap.add_argument("--batch_size", type=int, default=256)
     ap.add_argument("--epochs",     type=int, default=1000)
     ap.add_argument(
@@ -238,16 +247,15 @@ def main():
             config=vars(args),
         )
 
-    out_dir = os.path.join(embeds_dir, 'linear_probe_results')
+    out_dir = args.out_dir
     os.makedirs(out_dir, exist_ok=True)
 
     # Construct CSV path from labels_root and target
     labels_csv = os.path.join(args.labels_root, args.target + '.csv')
     print(f'Loading labels from: {labels_csv}')
 
-    paths_tr = get_paths_in_split(embeds_dir, 'train')
-    paths_va = get_paths_in_split(embeds_dir, 'val')
-    ds_tr = FeaturesDataset(paths_tr, labels_csv, target_column=args.target)
+    # Create datasets using 'split' column in CSV
+    ds_tr = FeaturesDataset(embeds_dir, labels_csv, split='train', target_column=args.target)
     embed_dim = ds_tr[0][0].shape[0]
     num_classes = ds_tr._get_num_classes()
     print(f'Feature dimension: {embed_dim}, num_classes: {num_classes}')
@@ -301,7 +309,8 @@ def main():
         drop_last=True,
     )
 
-    dl_va = DataLoader(FeaturesDataset(paths_va, labels_csv, target_column=args.target), batch_size=args.batch_size,
+    ds_va = FeaturesDataset(embeds_dir, labels_csv, split='val', target_column=args.target)
+    dl_va = DataLoader(ds_va, batch_size=args.batch_size,
                        shuffle=False, num_workers=args.num_workers, pin_memory=True)
 
     lrs = args.lrs

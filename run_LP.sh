@@ -1,7 +1,8 @@
 #!/bin/bash
 
 export CUDA_VISIBLE_DEVICES=0
-export WANDB_API_KEY=<your_wandb_api_key>
+#export WANDB_API_KEY=<your_wandb_api_key>
+OUT_ROOT="/home/jma/Documents/cryoSumin/CT_FM/data/results_cvpr26"
 
 disease_list=(
   splenomegaly
@@ -23,9 +24,9 @@ disease_list=(
 
 for disease in "${disease_list[@]}"; do
     echo "Running linear probing for ${disease} ..."
-    python run_linear_probe.py \
-        --embeds_root /home/jma/Documents/cryoSumin/CT_FM/data/embeddings/features_ct_fm_public_MultiStage \
-        --disease ${disease} \
-        --use_wandb
+    python run_LP.py \
+        --embeds_root /home/jma/Documents/cryoSumin/CT_FM/data/embeddings/features_public_MultiStage \
+        --target ${disease} \
+        --out_dir "$OUT_ROOT/${disease}/results_LP" 
 done
 
