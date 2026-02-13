@@ -3,6 +3,8 @@ not_upload/
 outputs*
 results*
 test_demo*
+*.tar.gz
+*-dev.sh
 
 # Python
 __pycache__/

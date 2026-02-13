@@ -36,14 +36,18 @@ The usage instruction is based on CT-NEXUS docker available [here](https://drive
 ### 0. Test demo cases using Docker
 Place [test_demo](https://huggingface.co/datasets/kmin06/CVPR26-3DCTFMCompetition/tree/main/AMOS-clf-tr-val/test_demo) in the current directory
 ```
+ls test_demo
+mkdir -p test_demo_outputs_ROI
+mkdir -p test_demo_outputs_non-ROI
 docker load -i ctnexus.tar.gz
-mkdir test_demo_outputs
 
 ## for Non-ROI disease
-docker container run --gpus "device=0" -m 32G --name ctnexus --rm -v $PWD/test_demo/images/:/workspace/inputs/ -v $PWD/test_demo_outputs/:/workspace/outputs/ ctnexus:latest /bin/bash -c "sh extract_feat_LP.sh"
+docker container run --gpus "device=0" -m 32G --name ctnexus --rm  -v $PWD/test_demo/:/workspace/inputs/ -v $PWD/test_demo_outputs_non-ROI/:/workspace/outputs/ ctnexus:latest /bin/bash -c "sh extract_feat_LP.sh"
+ls test_demo_outputs_non-ROI
 
 ## for ROI disease
-docker container run --gpus "device=0" -m 32G --name ctnexus --rm -e MASKS_DIR=/workspace/inputs/fg_masks/adrenal_hyperplasia -v $PWD/test_demo/:/workspace/inputs/ -v $PWD/test_demo_outputs/:/workspace/outputs/ ctnexus:latest /bin/bash -c "sh extract_feat_LP.sh"
+docker container run --gpus "device=0" -m 32G --name ctnexus --rm -e MASKS_DIR=/workspace/inputs/fg_masks/adrenal_hyperplasia -v $PWD/test_demo/:/workspace/inputs/ -v $PWD/test_demo_outputs_ROI/:/workspace/outputs/ ctnexus:latest /bin/bash -c "sh extract_feat_LP.sh"
+ls test_demo_outputs_ROI
 ```
 In case of permission error, please use `chmod -R 777 .`
 We will use `extract_feat_LP.sh` for **Task 1** linear probing, and `extract_feat_EAO.sh` for **Task 2** Embedding aggregation optimization.
@@ -112,7 +116,6 @@ python run_LP.py \
 - `--disease`: Disease classification task (e.g., splenomegaly, pneumonia, emphysema)
 - `--monitor_metric`: Metric to monitor during training (balanced_acc, auroc, f1, etc.)
 - `--use_wandb`: Enable Weights & Biases logging for experiment tracking (optional)
-
 
 ### 3. Embedding Aggregation Optimization (EAO)
 Trains and evaluates a linear classifier on top of frozen foundation model embeddings.

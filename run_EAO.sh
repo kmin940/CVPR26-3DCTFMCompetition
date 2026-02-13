@@ -3,9 +3,9 @@
 export CUDA_VISIBLE_DEVICES=1
 
 # Default values
-EMBEDS_ROOT="/home/jma/Documents/cryoSumin/CT_FM/data/embeddings/features_EAO_public_MultiStage"
-LABELS_ROOT="/home/jma/Documents/cryoSumin/CT_FM/data/raw_data_classify/amos-clf-tr-val/labels"
-OUT_ROOT="/home/jma/Documents/cryoSumin/CT_FM/data/results_cvpr26"
+EMBEDS_ROOT="/path/to/embeddings"
+LABELS_ROOT="/path/to/labels"
+OUT_ROOT="/path/to/results_cvpr26"
 
 # Attention pooling hyperparameters
 QUERY_NUM=2

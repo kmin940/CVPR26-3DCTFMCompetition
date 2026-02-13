@@ -199,9 +199,9 @@ def compute_sample_weights(ds: FeaturesDataset):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--embeds_root", default='/home/jma/Documents/cryoSumin/CT_FM/data/embeddings/features_ct_fm_roi_debug')
+    ap.add_argument("--embeds_root", default='/path/to/embeddings', help="Root directory containing subdirectories of embeddings for each target")
     ap.add_argument("--labels_root", type=str,
-                    default='/home/jma/Documents/cryoSumin/CT_FM/data/raw_data_classify/amos-clf-tr-val/labels',
+                    default='/path/to/labels',
                     help='Root directory containing CSV files for labels')
     ap.add_argument("--target", type=str, default='splenomegaly',
                     help='target name (used to construct CSV filename: target.csv)')
