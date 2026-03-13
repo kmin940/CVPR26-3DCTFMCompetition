@@ -43,13 +43,13 @@ def main():
     ap.add_argument(
         "--csv_root",
         type=str,
-        default="/home/jma/Documents/cryoSumin/CT_FM/data/embeddings/features_EAO_public_MultiStage",
+        default="/path/to/your/csv_root/across/diseases",
         help="Root directory containing disease subfolders with results/",
     )
     ap.add_argument(
         "--label_dir",
         type=str,
-        default="/home/jma/Documents/cryoSumin/CT_FM/data/raw_data_classify/amos-clf-tr-val/labels",
+        default="/path/to/your/label_dir",
         help="Directory containing per-disease label CSV files (e.g., adrenal_hyperplasia.csv)",
     )
     ap.add_argument(
