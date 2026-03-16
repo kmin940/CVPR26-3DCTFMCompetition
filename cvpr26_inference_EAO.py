@@ -156,10 +156,10 @@ def select_best_ckpt(ckpt_dir):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--embeds_root", default='/home/jma/Documents/cryoSumin/CT_FM/data/embeddings/features_ct_nexus_attn_pool',
+    ap.add_argument("--embeds_root", default='/path/to/embeddings',
                     help="Root directory for embeddings")
     ap.add_argument("--labels_root", type=str,
-                    default='/home/jma/Documents/cryoSumin/CT_FM/data/raw_data_classify/amos-clf-tr-val/labels',
+                    default='/path/to/labels',
                     help='Root directory containing CSV files for labels')
     ap.add_argument("--target", type=str, default='splenomegaly',
                     help='target name (used to construct CSV filename: target.csv)')
@@ -185,10 +185,10 @@ def main():
     args = ap.parse_args()
 
     # Set up paths
-    embeds_dir = os.path.join(args.embeds_root, args.target)
+    embeds_dir = os.path.join(args.embeds_root, args.target, 'embeddings')
 
-    if args.ckpt_dir is None:
-        args.ckpt_dir = os.path.join(embeds_dir, 'attn_pool_results')
+    # if args.ckpt_dir is None:
+    #     args.ckpt_dir = os.path.join(embeds_dir, 'attn_pool_results')
 
     print(f'Using checkpoint directory: {args.ckpt_dir}')
 
@@ -214,9 +214,6 @@ def main():
     if first_sample.dim() == 4:  # [D, H, W, L]
         embed_dim = first_sample.shape[0]
         print(f'Detected spatial features with shape: {first_sample.shape}')
-    elif first_sample.dim() == 2:  # [D, H*W*L]
-        embed_dim = first_sample.shape[0]
-        print(f'Detected flattened spatial features with shape: {first_sample.shape}')
     else:
         raise ValueError(f'Unexpected feature shape: {first_sample.shape}')
 

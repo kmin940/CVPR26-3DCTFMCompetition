@@ -48,7 +48,7 @@ output_temp = './outputs'
 os.makedirs(save_path, exist_ok=True)
 
 dockers = sorted(os.listdir(docker_path))
-dockers = [docker for docker in dockers if docker.endswith('.tar.gz')]
+dockers = [docker for docker in dockers if docker.endswith('_lp.tar.gz')]
 test_cases = sorted(os.listdir(test_img_path))
 # test_cases = test_cases[:1] # for debug
 
@@ -66,7 +66,7 @@ for docker in dockers:
         teamname = docker.split('.')[0].lower()
         print('teamname docker: ', docker)
         os.system('docker image load -i {}'.format(join(docker_path, docker)))
-        team_outpath = join(save_path, teamname, 'feats_lin_probe')
+        team_outpath = join(save_path, teamname, 'embeddings')
         if args.mask_root is not None:
             os.makedirs(join(input_temp, "fg_masks"), exist_ok=True)
         # if os.path.exists(team_outpath):

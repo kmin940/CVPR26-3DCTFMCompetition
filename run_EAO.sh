@@ -54,7 +54,7 @@ for TARGET in "${TARGETS[@]}"; do
         --embeds_root "$EMBEDS_ROOT" \
         --labels_root "$LABELS_ROOT" \
         --target "$TARGET" \
-        --out_dir "$OUT_ROOT/$TARGET/results_EAO" \
+        --out_dir "$OUT_ROOT/$TARGET/results" \
         --query_num $QUERY_NUM \
         --num_heads $NUM_HEADS \
         --num_layers $NUM_LAYERS \

@@ -27,6 +27,6 @@ for disease in "${disease_list[@]}"; do
     python run_LP.py \
         --embeds_root /path/to/embeddings \
         --target ${disease} \
-        --out_dir "$OUT_ROOT/${disease}/results_LP" 
+        --out_dir "$OUT_ROOT/${disease}/results" 
 done
 

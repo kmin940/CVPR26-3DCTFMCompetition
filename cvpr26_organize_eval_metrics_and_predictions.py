@@ -49,7 +49,7 @@ def main():
     ap.add_argument(
         "--label_dir",
         type=str,
-        default="/path/to/your/label_dir",
+        default="/path/to/your/amos-clf-tr-val/labels",
         help="Directory containing per-disease label CSV files (e.g., adrenal_hyperplasia.csv)",
     )
     ap.add_argument(

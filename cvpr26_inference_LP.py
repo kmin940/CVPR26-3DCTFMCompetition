@@ -16,23 +16,35 @@ from metrics.balanced_accuracy import BalancedAccuracy  # same as training
 import numpy as np
 import pandas as pd
 
+
 class FeaturesDataset(Dataset):
-    def __init__(self, paths, csv_path, target_column=None):
-        self.paths = paths
-        # Load label mapping from CSV file
+    def __init__(self, embeds_dir, csv_path, split, target_column=None):
+        # Load CSV and filter by split
         df = pd.read_csv(csv_path)
+        split_df = df[df['split'] == split].copy()
 
-        # Create label mapping: filename -> label
-        # Assuming CSV has columns: 'case_id' (or filename) and target_column
+        # Build paths and label mapping
+        self.paths = []
         self.label_mapping = {}
-        for _, row in df.iterrows():
-            # Extract filename without extension
-            filename = row['case_id'].split('.nii.gz')[0] if '.nii.gz' in row['case_id'] else row['case_id']
-            filename = filename.replace('.h5', '')  # Also handle .h5 extension
-            self.label_mapping[filename] = int(row[target_column])
 
-    def __len__(self):
-        return len(self.paths)
+        for _, row in split_df.iterrows():
+            # Extract filename without extension
+            case_id = row['case_id']
+            filename = case_id.split('.nii.gz')[0] if '.nii.gz' in case_id else case_id
+            filename_base = filename.replace('.h5', '')  # Base filename for mapping
+
+            # Construct path with .h5 extension
+            h5_filename = filename_base + '.h5'
+            path = os.path.join(embeds_dir, h5_filename)
+
+            # Only add if file exists
+            if os.path.exists(path):
+                self.paths.append(path)
+                self.label_mapping[filename_base] = int(row[target_column])
+            else:
+                print(f"Warning: File not found, skipping: {path}")
+
+    def __len__(self): return len(self.paths)
 
     def __getitem__(self, i):
         path = self.paths[i]
@@ -46,7 +58,7 @@ class FeaturesDataset(Dataset):
 
         # Load features from h5 file
         with h5py.File(path, 'r') as hf:
-            y_hat = torch.tensor(hf['y_hat'][:]).float()
+            y_hat = torch.tensor(hf['y_hat'][:]).float() # torch.Size([2048])
 
         return y_hat, y
 
@@ -54,13 +66,6 @@ class FeaturesDataset(Dataset):
         # Get unique labels from the CSV mapping
         all_labels = set(self.label_mapping.values())
         return len(all_labels)
-
-
-def get_paths_in_split(base_dir, split):
-    split_dir = os.path.join(base_dir, split)
-    all_files = os.listdir(split_dir)
-    all_paths = [os.path.join(split_dir, f) for f in all_files if f.endswith('.h5')]
-    return all_paths
 
 
 def load_head(ckpt_path, in_dim, num_classes, device):
@@ -99,16 +104,16 @@ def select_best_ckpt(ckpt_dir):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--embeds", default='/home/jma/Documents/cryoSumin/CT_FM/data/embeddings/features_ct_fm_public_MultiStage/fatty_liver',
+    ap.add_argument("--embeds_root", default='/path/to/embeddings',
                     help="Path to embeddings directory containing train/val/test splits")
     ap.add_argument("--labels_root", type=str,
-                    default='/home/jma/Documents/cryoSumin/CT_FM/data/raw_data_classify/amos-clf-tr-val/test/labels',
+                    default='/path/to/labels',
                     help='Root directory containing CSV files for labels')
     ap.add_argument("--target", type=str, default='fatty_liver',
                     help='target name (used to construct CSV filename: target.csv)')
     ap.add_argument("--split", type=str, default="test",
                     help="Split to run inference on (default: test)")
-    ap.add_argument("--ckpt_dir", default='/home/jma/Documents/cryoSumin/CT_FM/data/embeddings/features_ct_fm_public_MultiStage/fatty_liver/results3',
+    ap.add_argument("--ckpt_dir", default='/path/to/checkpoints',
                     help="checkpoint saved by save_single_head(...) in training")
     ap.add_argument("--batch_size", type=int, default=256)
     ap.add_argument("--num_workers", type=int, default=4)
@@ -122,11 +127,11 @@ def main():
     print(f'Loading labels from: {labels_csv}')
 
     # Load paths from the specified split
-    paths = get_paths_in_split(args.embeds, args.split)
+    embeds_dir = os.path.join(args.embeds_root, args.target, 'embeddings')
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     # Create dataset
-    ds = FeaturesDataset(paths, labels_csv, target_column=args.target)
+    ds = FeaturesDataset(embeds_dir, labels_csv, split=args.split, target_column=args.target)
     num_classes = ds._get_num_classes()
     in_dim = ds[0][0].shape[0]
 
@@ -163,8 +168,8 @@ def main():
 
             # Extract filenames for this batch
             batch_start = batch_idx * args.batch_size
-            batch_end = min(batch_start + xb.size(0), len(paths))
-            batch_paths = paths[batch_start:batch_end]
+            batch_end = min(batch_start + xb.size(0), len(ds.paths))
+            batch_paths = ds.paths[batch_start:batch_end]
             batch_filenames = [os.path.basename(p).replace('.h5', '') for p in batch_paths]
             all_filenames.extend(batch_filenames)
 

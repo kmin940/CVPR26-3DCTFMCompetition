@@ -226,7 +226,7 @@ def main():
                 help="Early stopping patience based on best head")
     #ap.add_argument("--wandb_run_name", type=str, default=None)
     args = ap.parse_args()
-    embeds_dir = os.path.join(args.embeds_root, args.target)
+    embeds_dir = os.path.join(args.embeds_root, args.target, "embeddings")
 
     use_wandb = args.use_wandb
     if use_wandb:
