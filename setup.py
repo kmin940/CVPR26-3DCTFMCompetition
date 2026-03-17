@@ -52,13 +52,7 @@ setup(
         ],
     },
     scripts=[
-        "run_linear_probe.py",
-        "cvpr26_extract_feat_docker.py",
+        "run_LP.py",
+        "run_EAO.py",
     ],
-    entry_points={
-        "console_scripts": [
-            "cvpr26-linear-probe=run_linear_probe:main",
-            "cvpr26-extract-feat=cvpr26_extract_feat_docker:main",
-        ],
-    },
 )
