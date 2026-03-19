@@ -88,11 +88,12 @@ for docker in dockers:
                 raise Exception(f"Error copying {case} from {join(test_img_path, case)} to {input_temp}. Please check if the file exists and permissions are set correctly.")
             if args.mask_root is not None:
                 mask_src = join(args.mask_root, case)
-                #if os.path.exists(mask_src):
-                dst_mask = shutil.copy(mask_src, join(input_temp, "fg_masks"))
-                os.chmod(dst_mask, 0o644)
-                # else:
-                #     print(f"Warning: Mask file {mask_src} not found for {case}. Proceeding without mask.")
+                if os.path.exists(mask_src):
+                    dst_mask = shutil.copy(mask_src, join(input_temp, "fg_masks"))
+                    os.chmod(dst_mask, 0o644)
+                else:
+                    print(f"Warning: Mask file {mask_src} not found for {case}. Skipping.")
+                    continue
             # print(f'============================ copied {case} to {input_temp} from {join(test_img_path, case)}')
             # assert case exists in input_temp
             # assert os.path.exists(join(input_temp, case)), f"Error: {case} not found in {input_temp} after copying. Please check the file and permissions."
