@@ -33,6 +33,15 @@ bash download_data.sh
 ## Usage
 The usage instruction is based on CT-NEXUS docker available [here for Task 1 (LP)](https://drive.google.com/file/d/126Z7bR25QWH6HDNyzn6z1zIkxZN3CiTU/view) and [here for Task 2 (EAO)](https://drive.google.com/file/d/1nPmeVhkda8rMXT6s-cXmlWD0L9lzzeLz/view).
 
+### Download Docker Images
+```bash
+# Download Task 1 (LP) docker image
+bash download_LP_image_example.sh
+
+# Download Task 2 (EAO) docker image
+bash download_EAO_image_example.sh
+```
+
 ### 0. Test demo cases using Docker
 Place [test_demo](https://huggingface.co/datasets/kmin06/CVPR26-3DCTFMCompetition/tree/main/AMOS-clf-tr-val/test_demo) in the current directory.
 
@@ -42,6 +51,8 @@ ls test_demo
 mkdir -p test_demo_outputs_ROI
 mkdir -p test_demo_outputs_non-ROI
 docker load -i ctnexus_lp.tar.gz
+
+chmod -R 777 .
 
 ## for Non-ROI disease
 docker container run --gpus "device=0" -m 32G --name ctnexus_lp --rm  -v $PWD/test_demo/:/workspace/inputs/ -v $PWD/test_demo_outputs_non-ROI/:/workspace/outputs/ ctnexus_lp:latest /bin/bash -c "sh extract_feat_LP.sh"
@@ -58,6 +69,8 @@ ls test_demo
 mkdir -p test_demo_outputs_ROI_eao
 mkdir -p test_demo_outputs_non-ROI_eao
 docker load -i ctnexus_eao.tar.gz
+
+chmod -R 777 .
 
 ## for Non-ROI disease
 docker container run --gpus "device=0" -m 32G --name ctnexus_eao --rm  -v $PWD/test_demo/:/workspace/inputs/ -v $PWD/test_demo_outputs_non-ROI_eao/:/workspace/outputs/ ctnexus_eao:latest /bin/bash -c "sh extract_feat_EAO.sh"
