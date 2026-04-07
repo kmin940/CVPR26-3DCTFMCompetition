@@ -84,7 +84,7 @@ In case of permission error, please use `chmod -R 777 .`
 We will use `extract_feat_LP.sh` for **Task 1** linear probing, and `extract_feat_EAO.sh` for **Task 2** Embedding aggregation optimization.
 
 ### 1. Feature Extraction using Docker
-Extracts embeddings from CT scans using foundation models packaged in Docker containers. The output embeddings are saved in `./path/to/results/target_disease/embeddings`
+Extracts embeddings from CT scans using foundation models packaged in Docker containers. 
 
 For non-ROI diseases:
 ```bash
