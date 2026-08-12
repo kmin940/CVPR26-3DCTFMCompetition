@@ -124,11 +124,13 @@ for docker in dockers:
                     try:
                         if os.path.isfile(src):
                             shutil.copy2(src, dst)
+                            os.remove(src)
                             # print(f"Copied {output_file} to {team_outpath}")
                         elif os.path.isdir(src):
                             if os.path.exists(dst):
                                 shutil.rmtree(dst)
                             shutil.copytree(src, dst)
+                            shutil.rmtree(src)
                             # print(f"Copied directory {output_file} to {team_outpath}")
                     except Exception as e:
                         print(f"Error copying {output_file}: {e}")
