@@ -1,6 +1,9 @@
 import argparse, os, random, shutil, torch
-import os
 os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
+os.environ.setdefault("MPLCONFIGDIR", os.path.join("/tmp", "cvpr26_matplotlib"))
+os.environ.setdefault("XDG_CACHE_HOME", os.path.join("/tmp", "cvpr26_cache"))
+os.makedirs(os.environ["MPLCONFIGDIR"], exist_ok=True)
+os.makedirs(os.environ["XDG_CACHE_HOME"], exist_ok=True)
 torch.use_deterministic_algorithms(True)
 from torch import nn
 import torch.nn.functional as F
@@ -203,7 +206,10 @@ class AllClassifiers(nn.Module):
                                 # filename safety, mirroring the wd suffix scheme.
                                 name += (f"_eps_{eps:.0e}"
                                          .replace("-", "_").replace("+", "_").replace(".", "_"))
-                            m = nn.Linear(in_dim, num_classes)
+                            # Single-logit binary head: one output for the
+                            # positive class (BCEWithLogitsLoss), regardless of
+                            # the nominal num_classes (== 2 for this script).
+                            m = nn.Linear(in_dim, 1)
                             nn.init.normal_(m.weight, 0.0, 0.01)
                             nn.init.zeros_(m.bias)
                             self.clfs[name] = m
@@ -232,6 +238,24 @@ class AllClassifiers(nn.Module):
 
 def acc_top1(logits, y):  # "top-1"
     return (logits.argmax(1) == y).float().mean().item()
+
+
+class BCEWithLogitsLossBinary(nn.Module):
+    """Binary BCEWithLogitsLoss for a single-logit head.
+
+    This script is binary-only (num_classes == 2): each head is an
+    ``nn.Linear(in_dim, 1)`` producing one real-valued logit for the positive
+    class. Inputs are ``logits: (B, 1)`` and integer class labels ``target: (B,)``
+    in {0, 1}; both are flattened to (B,) and the target cast to float so the
+    shapes/dtype match what BCEWithLogitsLoss expects (sigmoid + binary
+    cross-entropy on the single logit).
+    """
+    def __init__(self):
+        super().__init__()
+        self.loss = nn.BCEWithLogitsLoss()
+
+    def forward(self, logits, target):
+        return self.loss(logits.reshape(-1), target.float().reshape(-1))
 
 def build_optimizer(name, param_groups, weight_decay=0.0):
     """Build the optimizer (adapted from dinov3 OptimizerType). `weight_decay` is
@@ -315,14 +339,18 @@ def train_one_epoch(model, loader, opt, crit, device, scheduler=None):
 
 @torch.no_grad()
 def evaluate(model, loader, crit, device, num_classes, monitor_metric, monitor_metric_mode="max"):
+    # Binary single-logit setup: every metric consumes the one positive-class
+    # logit per sample (torchmetrics binary metrics sigmoid+threshold internally,
+    # AUROC/AP use the continuous score). num_classes is accepted for signature
+    # compatibility but unused here.
     base_metrics = MetricCollection({
-        "acc": Accuracy(task="multiclass", num_classes=num_classes),
-        "f1": F1Score(task="multiclass", num_classes=num_classes, average="macro"),
-        "auroc": AUROC(task="multiclass", num_classes=num_classes),
-        "ap": AveragePrecision(task="multiclass", num_classes=num_classes),
-        "sensitivity": Recall(task="multiclass", num_classes=num_classes, average="macro"),
-        "specificity": Specificity(task="multiclass", num_classes=num_classes, average="macro"),
-        "balanced_acc": BalancedAccuracy(num_classes=num_classes, task="multiclass"),
+        "acc": Accuracy(task="binary"),
+        "f1": F1Score(task="binary"),
+        "auroc": AUROC(task="binary"),
+        "ap": AveragePrecision(task="binary"),
+        "sensitivity": Recall(task="binary"),
+        "specificity": Specificity(task="binary"),
+        "balanced_acc": BalancedAccuracy(task="binary"),
     })
 
     model.eval()
@@ -341,8 +369,13 @@ def evaluate(model, loader, crit, device, num_classes, monitor_metric, monitor_m
         total_samples += batch_size
 
         for name, logits in outputs.items():
+            # (B, 1) -> (B,): binary loss and binary metrics both want the flat
+            # per-sample positive-class score.
+            logits = logits.reshape(-1)
             losses[name] += crit(logits, yb).item() * batch_size
-            metrics[name].update(logits, yb)
+            # Feed probabilities (always in [0,1]) so no metric's logits-vs-probs
+            # heuristic can misfire; sigmoid is monotonic so AUROC/AP are unchanged.
+            metrics[name].update(torch.sigmoid(logits), yb)
 
     for name in names:
         losses[name] /= total_samples
@@ -643,12 +676,12 @@ def main():
     ap.add_argument("--out_dir", type=str, required=True,
                     help="Output directory for this run.")
     ap.add_argument("--batch_size", type=int, default=128)
-    ap.add_argument("--epochs",     type=int, default=150)
+    ap.add_argument("--epochs",     type=int, default=100)
     ap.add_argument(
                         "--lrs",
                         type=float,
                         nargs="+",
-                        default=[1e-5, 2e-5, 5e-5, 1e-4, 2e-4, 5e-4, 1e-3, 2e-3, 5e-3, 1e-2, 2e-2, 5e-2, 0.1], #[5e-4, 5e-3, 5e-2], #[5e-4, 1e-3, 2e-3, 5e-3, 1e-2, 2e-2, 5e-2], #[1e-5, 2e-5, 5e-5, 1e-4, 2e-4, 5e-4, 1e-3, 2e-3, 5e-3, 1e-2, 2e-2, 5e-2, 0.1],
+                        default=[1e-5, 2e-5, 5e-5, 1e-4, 2e-4, 5e-4, 1e-3, 2e-3, 5e-3, 1e-2, 2e-2, 5e-2, 0.1], #[1e-4, 2e-4, 5e-4, 1e-3, 2e-3, 5e-3, 1e-2, 2e-2, 5e-2, 1e-1, 2e-1, 5e-1, 1e0, 2e0, 5e0], #[5e-4, 5e-3, 5e-2], #[5e-4, 1e-3, 2e-3, 5e-3, 1e-2, 2e-2, 5e-2], #[1e-5, 2e-5, 5e-5, 1e-4, 2e-4, 5e-4, 1e-3, 2e-3, 5e-3, 1e-2, 2e-2, 5e-2, 0.1],
                         help="List of learning rates"
                     )
     ap.add_argument("--num_workers", type=int, default=16)
@@ -657,9 +690,9 @@ def main():
                     help="Optimizer for the linear heads. 'sgd' uses momentum=0.9; "
                          "weight decay is controlled by --weight_decay.")
     ap.add_argument("--weight_decays", type=float, nargs="+",
-                    default=[1e-5, 1e-4, 1e-3, 1e-2],
+                    default=[1e-6, 1e-3, 0],
                     help="Sweep multiple weight decays in parallel")
-    ap.add_argument("--norms", type=str, nargs="+", default=["raw", "std"],
+    ap.add_argument("--norms", type=str, nargs="+", default=["raw"],  # , "l2"
                     choices=["raw", "l2", "std", "ln"],
                     help="Sweep input-normalization variants in parallel, one independent head per (lr, weight_decay, norm) combination. ")
     ap.add_argument("--betas", type=str, nargs="+",
@@ -687,7 +720,7 @@ def main():
                 help="EMA decay for the early-stopping monitor metric. The patience counter is driven by an exponential moving average ema = decay*ema + (1-decay)*current, so noisy single-epoch dips/spikes don't reset or prematurely trip patience. 0 disables it.")
     ap.add_argument("--min_save_epoch", type=int, default=6,
                 help="Only save/select checkpoints from this epoch onward (inclusive)")
-    ap.add_argument("--seed", type=int, default=42,
+    ap.add_argument("--seed", type=int, default=2026, #42,
                 help="Random seed for weight init and per-epoch sampling")
     ap.add_argument("--gap_penalty_weight", type=float, default=0.5,
                 help="Weight on |train_loss - val_loss| subtracted from the base score in the 'val_balacc_auroc_gap' checkpoint strategy. Penalizes overfitting (large train/val loss gap).")
@@ -735,6 +768,13 @@ def main():
 
     embed_dim = ds_tr[0][0].shape[0]
     num_classes = ds_tr._get_num_classes()
+    # This is the single-logit binary variant (BCEWithLogitsLoss); it is only
+    # valid for a 2-class target. Fail loudly rather than silently mis-train.
+    if num_classes != 2:
+        raise ValueError(
+            f"This script is binary-only, but found "
+            f"num_classes={num_classes} in the training split. Use the "
+            f"cross-entropy script for >2 classes.")
     print(f'  Feature dimension: {embed_dim}, num_classes: {num_classes}')
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -843,7 +883,7 @@ def main():
     )
     print(f"  optimizer={args.optimizer}, scheduler={args.scheduler}, "
           f"epoch_length={epoch_length}, warmup_iters={warmup_iters}")
-    crit = nn.CrossEntropyLoss()
+    crit = BCEWithLogitsLossBinary()
 
     monitor_metric = args.monitor_metric
     monitor_metric_mode = args.monitor_metric_mode
