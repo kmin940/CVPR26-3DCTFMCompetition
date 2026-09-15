@@ -236,10 +236,6 @@ class AllClassifiers(nn.Module):
         views = self._make_views(x)
         return {k: m(views[self.head_view[k]]) for k, m in self.clfs.items()}
 
-def acc_top1(logits, y):  # "top-1"
-    return (logits.argmax(1) == y).float().mean().item()
-
-
 class BCEWithLogitsLossBinary(nn.Module):
     """Binary BCEWithLogitsLoss for a single-logit head.
 
@@ -254,8 +250,8 @@ class BCEWithLogitsLossBinary(nn.Module):
         super().__init__()
         self.loss = nn.BCEWithLogitsLoss()
 
-    def forward(self, logits, target):
-        return self.loss(logits.reshape(-1), target.float().reshape(-1))
+    def forward(self, logits, target):  # logits: (B, 1), target: (B,) int in {0, 1}
+        return self.loss(logits.reshape(-1), target.float().reshape(-1))  # both -> (B,) float; returns scalar
 
 def build_optimizer(name, param_groups, weight_decay=0.0):
     """Build the optimizer (adapted from dinov3 OptimizerType). `weight_decay` is
@@ -326,7 +322,7 @@ def train_one_epoch(model, loader, opt, crit, device, scheduler=None):
         opt.zero_grad(set_to_none=True)
         loss.backward()
         opt.step()
-        # Per-iteration LR schedule step (matches dinov3 linear.py).
+        # Per-iteration LR schedule step.
         if scheduler is not None:
             scheduler.step()
         tot_loss += loss.item() * batch_size
@@ -338,7 +334,7 @@ def train_one_epoch(model, loader, opt, crit, device, scheduler=None):
 
 
 @torch.no_grad()
-def evaluate(model, loader, crit, device, num_classes, monitor_metric, monitor_metric_mode="max"):
+def evaluate(model, loader, crit, device, num_classes, monitor_metric, monitor_metric_mode="min"):
     # Binary single-logit setup: every metric consumes the one positive-class
     # logit per sample (torchmetrics binary metrics sigmoid+threshold internally,
     # AUROC/AP use the continuous score). num_classes is accepted for signature
@@ -369,12 +365,10 @@ def evaluate(model, loader, crit, device, num_classes, monitor_metric, monitor_m
         total_samples += batch_size
 
         for name, logits in outputs.items():
-            # (B, 1) -> (B,): binary loss and binary metrics both want the flat
-            # per-sample positive-class score.
+            # (B, 1) -> (B,): binary loss and binary metrics both want the flat per-sample positive-class score.
             logits = logits.reshape(-1)
             losses[name] += crit(logits, yb).item() * batch_size
-            # Feed probabilities (always in [0,1]) so no metric's logits-vs-probs
-            # heuristic can misfire; sigmoid is monotonic so AUROC/AP are unchanged.
+            # Feed probabilities (always in [0,1]) so no metric's logits-vs-probs heuristic can misfire; sigmoid is monotonic so AUROC/AP are unchanged.
             metrics[name].update(torch.sigmoid(logits), yb)
 
     for name in names:
@@ -720,7 +714,7 @@ def main():
                 help="EMA decay for the early-stopping monitor metric. The patience counter is driven by an exponential moving average ema = decay*ema + (1-decay)*current, so noisy single-epoch dips/spikes don't reset or prematurely trip patience. 0 disables it.")
     ap.add_argument("--min_save_epoch", type=int, default=6,
                 help="Only save/select checkpoints from this epoch onward (inclusive)")
-    ap.add_argument("--seed", type=int, default=2026, #42,
+    ap.add_argument("--seed", type=int, default=42, #42,
                 help="Random seed for weight init and per-epoch sampling")
     ap.add_argument("--gap_penalty_weight", type=float, default=0.5,
                 help="Weight on |train_loss - val_loss| subtracted from the base score in the 'val_balacc_auroc_gap' checkpoint strategy. Penalizes overfitting (large train/val loss gap).")
@@ -891,7 +885,7 @@ def main():
     # End-of-run "raw best" tracker: best single (head, epoch) by --monitor_metric,
     # un-smoothed, for the final report only. Early stopping is per-head (see the
     # per-head state set up just before the epoch loop).
-    init_met_val = -1.0 if monitor_metric_mode == "max" else np.inf
+    init_met_val = -np.inf if monitor_metric_mode == "max" else np.inf
     best_met_overall = init_met_val
     best_head_overall = None
 
@@ -1021,7 +1015,7 @@ def main():
             val_loss_ema_over_epochs[name].append(ema)
 
         # Per-strategy checkpoint selection (only from --min_save_epoch onward) ---
-        active_heads = [n for n in head_names if n not in converged_heads]
+        active_heads = [n for n in head_names if n not in converged_at_epoch_start]
         if ep >= args.min_save_epoch and active_heads:
             for s in checkpoint_strategies:
                 sname, smode, sscore = s["name"], s["mode"], s["score"]
