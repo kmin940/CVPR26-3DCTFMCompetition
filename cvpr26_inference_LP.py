@@ -16,6 +16,20 @@ from torchmetrics import (
 from metrics.balanced_accuracy import BalancedAccuracy  # same as training
 import pandas as pd
 
+# Binary single-logit inference, the counterpart to run_LP_decays_norm_release_bce.py.
+# That trainer saves heads that are nn.Linear(in_dim, 1) trained with
+# BCEWithLogitsLoss, so each checkpoint emits ONE positive-class logit per sample
+# rather than a per-class logit vector. This script loads such heads, applies the
+# recorded input norm, and scores them with the *binary* torchmetrics stack (exactly
+# what the trainer's evaluate() uses).
+#
+# Downstream consumers read two logit/probability columns and `prob_class_1`.
+# The five-fold summaries read prob_class_1 and use the same binary metrics.
+# For real samples:
+#     logit_class_0 = 0, logit_class_1 = z   =>   softmax([0, z])[1] == sigmoid(z)
+# Threshold predictions use sigmoid(z) > 0.5, including floating-point ties.
+NUM_CLASSES = 2  # this script is binary-only, matching the BCE trainer
+
 
 class FeaturesDataset(Dataset):
     def __init__(self, embeds_dir, csv_path, split, target_column=None, split_column='split'):
@@ -72,7 +86,7 @@ class FeaturesDataset(Dataset):
 
 def apply_norm(X, norm, feat_mean, feat_std):
     """Apply the input transform the head was trained under, recorded in its
-    checkpoint by run_LP_decays_norm.py. Must match the 'norm' axis exactly:
+    checkpoint by run_LP_decays_norm_release_bce.py. Must match the 'norm' axis exactly:
       * 'raw' (or None for legacy ckpts) -> identity (features as-is).
       * 'l2'  -> L2-normalize to the unit sphere (F.normalize, dim=1).
       * 'std' -> z-score with the train-set per-dim mean/std stored in the ckpt.
@@ -95,15 +109,16 @@ def apply_norm(X, norm, feat_mean, feat_std):
     raise ValueError(f"Unknown norm '{norm}' in checkpoint.")
 
 
-def load_head(ckpt_path, in_dim, num_classes, device):
+def load_head(ckpt_path, in_dim, device):
     ckpt = torch.load(ckpt_path, map_location="cpu")
     sd = ckpt["state_dict"]
     stripped = {k.split(".", 2)[-1]: v for k, v in sd.items()}
-    head = nn.Linear(in_dim, num_classes)
+    # Single-logit binary head (nn.Linear(in_dim, 1)) — the BCE trainer's output shape.
+    head = nn.Linear(in_dim, 1)
     head.load_state_dict(stripped, strict=True)
     head.to(device)
     head.eval()
-    # Input-normalization variant + (for 'std') the train stats. 
+    # Input-normalization variant + (for 'std') the train stats.
     norm = ckpt.get("norm", "raw")
     feat_mean = ckpt.get("feat_mean", None)
     feat_std = ckpt.get("feat_std", None)
@@ -114,23 +129,27 @@ def load_head(ckpt_path, in_dim, num_classes, device):
             norm, feat_mean, feat_std, betas, eps)
 
 
-def build_metrics(num_classes, device):
+def build_metrics(device):
+    # Binary single-logit metric stack, matching the BCE trainer's evaluate():
+    # every metric consumes the one positive-class score per sample (torchmetrics
+    # binary metrics sigmoid+threshold logits internally; AUROC/AP use the
+    # continuous score).
     base_metrics = MetricCollection({
-        "acc": Accuracy(task="multiclass", num_classes=num_classes),
-        "f1": F1Score(task="multiclass", num_classes=num_classes, average="macro"),
-        "auroc": AUROC(task="multiclass", num_classes=num_classes),
-        "ap": AveragePrecision(task="multiclass", num_classes=num_classes),
-        "sensitivity": Recall(task="multiclass", num_classes=num_classes, average="macro"),
-        "specificity": Specificity(task="multiclass", num_classes=num_classes, average="macro"),
-        "balanced_acc": BalancedAccuracy(num_classes=num_classes, task="multiclass"),
+        "acc": Accuracy(task="binary"),
+        "f1": F1Score(task="binary"),
+        "auroc": AUROC(task="binary"),
+        "ap": AveragePrecision(task="binary"),
+        "sensitivity": Recall(task="binary"),
+        "specificity": Specificity(task="binary"),
+        "balanced_acc": BalancedAccuracy(task="binary"),
     }).to(device)
     return base_metrics
 
 
 # Checkpoint filenames written by run_LP.py are
 #   best_<strategy>_<score>_<head>_ep<N>.pth
-# where <score> is a signed %.4f float and <head> starts with "clf_lr_". 
-# We parse the strategy out of the filename rather than matching against a hardcoded list, so any new checkpoint-selection strategy added to run_LP.py is discovered automatically here. 
+# where <score> is a signed %.4f float and <head> starts with "clf_lr_".
+# We parse the strategy out of the filename rather than matching against a hardcoded list, so any new checkpoint-selection strategy added to run_LP.py is discovered automatically here.
 _CKPT_RE = re.compile(
     r"^best_(?P<strategy>.+?)_(?P<score>-?\d+\.\d+)_(?P<head>clf_lr_.+)_ep(?P<epoch>\d+)\.pth$"
 )
@@ -207,15 +226,16 @@ def load_features(ds, batch_size, num_workers):
     return torch.cat(xs, 0), torch.cat(ys, 0), filenames
 
 
-def score_head(head, X, y, filenames, missing, num_classes, device,
+def score_head(head, X, y, filenames, missing, device,
                norm="raw", feat_mean=None, feat_std=None):
-    """Apply one strategy's head to the cached features (+ failed missing cases).
+    """Apply one strategy's single-logit head to the cached features (+ failed cases).
 
-    The cached X is raw; the head's recorded `norm` (raw/l2/std) is applied here so
+    The cached X is raw; the head's recorded `norm` (raw/l2/std/ln) is applied here so
     multiple heads with different norms can each transform the same tensor. Returns
-    (computed_metrics, logits, probs, preds, labels, out_filenames) with the real
-    samples first and the synthetic failed-missing rows appended, matching
-    out_filenames order.
+    (computed_metrics, logits_z, probs, preds, labels, out_filenames) where logits_z
+    is the (N,) positive-class logit. Real probabilities are sigmoid(logits_z);
+    missing rows use exact wrong-class probabilities and finite placeholder logits.
+    Real samples come first, followed by missing rows, matching out_filenames.
     """
     all_logits, all_probs, all_preds, all_labels = [], [], [], []
     out_filenames = list(filenames)
@@ -223,37 +243,41 @@ def score_head(head, X, y, filenames, missing, num_classes, device,
     if X.numel() > 0:
         with torch.no_grad():
             Xn = apply_norm(X.to(device, non_blocking=True), norm, feat_mean, feat_std)
-            logits = head(Xn)
-            probs = torch.softmax(logits, dim=1)
-            preds = logits.argmax(1)
+            # (B, 1) -> (B,): one positive-class logit per sample.
+            logits = head(Xn).reshape(-1)
+            probs = torch.sigmoid(logits)
+            preds = (probs > 0.5).long()  # Match the binary metrics, including ties.
         all_logits.append(logits.cpu())
         all_probs.append(probs.cpu())
         all_preds.append(preds.cpu())
         all_labels.append(y)
 
-    # Missing test cases: treat as failed. For binary this means prob[GT]=0,
-    # prob[1-GT]=1; generalized to multiclass by routing mass to (GT+1) % num_classes.
+    # Missing cases get the worst probability endpoint for their true class:
+    # GT=1 -> p=0, GT=0 -> p=1. Finite logits are compatibility placeholders;
+    # scoring and pooling must use the explicit probabilities for these rows.
     n_missing = len(missing)
     if n_missing > 0:
         miss_labels = torch.tensor([lbl for _, lbl in missing], dtype=torch.long)
-        miss_preds = (miss_labels + 1) % num_classes
-        miss_probs = torch.zeros(n_missing, num_classes, dtype=torch.float)
-        miss_probs[torch.arange(n_missing), miss_preds] = 1.0
-        miss_logits = torch.full((n_missing, num_classes), -10.0)
-        miss_logits[torch.arange(n_missing), miss_preds] = 10.0
+        miss_logits = torch.where(miss_labels == 1,
+                                  torch.tensor(-10.0), torch.tensor(10.0))
+        miss_probs = (1 - miss_labels).float()
+        miss_preds = (miss_probs > 0.5).long()
         all_logits.append(miss_logits)
         all_probs.append(miss_probs)
         all_preds.append(miss_preds)
         all_labels.append(miss_labels)
         out_filenames = out_filenames + [fn for fn, _ in missing]
 
-    all_logits = torch.cat(all_logits, 0) if all_logits else torch.empty(0, num_classes)
-    all_probs = torch.cat(all_probs, 0) if all_probs else torch.empty(0, num_classes)
+    all_logits = torch.cat(all_logits, 0) if all_logits else torch.empty(0)
+    all_probs = torch.cat(all_probs, 0) if all_probs else torch.empty(0)
     all_preds = torch.cat(all_preds, 0) if all_preds else torch.empty(0, dtype=torch.long)
     all_labels = torch.cat(all_labels, 0) if all_labels else torch.empty(0, dtype=torch.long)
 
-    metrics = build_metrics(num_classes, device)
-    metrics.update(all_logits.to(device), all_labels.to(device))
+    # Feed probabilities (always in [0,1]) so no metric's logits-vs-probs heuristic
+    # can misfire; threshold-based metrics binarize at prob > 0.5, matching the
+    # per-sample `prediction` column. Mirrors the BCE trainer's evaluate().
+    metrics = build_metrics(device)
+    metrics.update(all_probs.to(device), all_labels.to(device))
     computed = metrics.compute()
     computed_cpu = {k: (v.item() if torch.is_tensor(v) else v) for k, v in computed.items()}
 
@@ -299,14 +323,19 @@ def main():
     if len(ds) == 0 and not ds.missing:
         raise RuntimeError(f"No samples found for {fold_col}=={args.split} under {args.embeds_dir}")
 
-    # Derive num_classes / in_dim from one checkpoint (architecture is identical
-    # across strategies) so we stay consistent with training on tiny test splits.
+    # Derive in_dim from one checkpoint (architecture is identical across strategies).
+    # BCE heads are nn.Linear(in_dim, 1), so the weight is (1, in_dim); num_classes is
+    # fixed at 2 for this binary script regardless of the single output logit.
     _peek = torch.load(os.path.join(args.ckpt_dir, next(iter(selected.values()))),
                        map_location="cpu")
     _sd = _peek["state_dict"]
     _w_key = next(k for k in _sd.keys() if k.endswith("weight"))
-    num_classes, in_dim = _sd[_w_key].shape
-    num_classes = int(num_classes); in_dim = int(in_dim)
+    out_dim, in_dim = _sd[_w_key].shape
+    out_dim = int(out_dim); in_dim = int(in_dim)
+    if out_dim != 1:
+        raise ValueError(
+            f"Expected single-logit BCE heads (out_features=1) but checkpoint has "
+            f"out_features={out_dim}. Use cvpr26_inference_LP_norm.py for multiclass heads.")
     del _peek, _sd
 
     # Read every .h5 once; each strategy head is applied to the same feature tensor
@@ -322,11 +351,11 @@ def main():
         suffix = "" if strat == "best" else f"_{strat}"
         ckpt_path = os.path.join(args.ckpt_dir, ckpt_name)
         head, head_name, _, norm, feat_mean, feat_std, betas, eps = load_head(
-            ckpt_path, in_dim, num_classes, device)
+            ckpt_path, in_dim, device)
 
         (computed_cpu, all_logits, all_probs, all_preds,
          all_labels, out_filenames) = score_head(
-            head, X, y, filenames, ds.missing, num_classes, device,
+            head, X, y, filenames, ds.missing, device,
             norm=norm, feat_mean=feat_mean, feat_std=feat_std)
 
         print(f"[{strat}] {ckpt_name} (norm={norm}) metrics:")
@@ -349,16 +378,21 @@ def main():
         df_metrics.to_csv(metrics_csv_path, index=False)
         print(f"Saved aggregate metrics to {metrics_csv_path}")
 
+        # Binary summaries use prob_class_1, including exact missing-case endpoints.
+        # The finite logits remain available for legacy consumers, but are only
+        # placeholders for missing rows and must not reconstruct their scores.
+        z = all_logits.numpy()
+        p = all_probs.numpy()
         per_sample_data = {
             'filename': out_filenames,
             'label': all_labels.numpy(),
             'prediction': all_preds.numpy(),
             'missing': [0] * n_real + [1] * n_missing,
+            'logit_class_0': [0.0] * len(z),
+            'logit_class_1': z,
+            'prob_class_0': 1.0 - p,
+            'prob_class_1': p,
         }
-        for class_idx in range(num_classes):
-            per_sample_data[f'logit_class_{class_idx}'] = all_logits[:, class_idx].numpy()
-        for class_idx in range(num_classes):
-            per_sample_data[f'prob_class_{class_idx}'] = all_probs[:, class_idx].numpy()
 
         df_per_sample = pd.DataFrame(per_sample_data)
         per_sample_csv_path = os.path.join(
